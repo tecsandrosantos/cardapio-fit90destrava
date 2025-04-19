@@ -5,6 +5,17 @@ import os
 
 app = FastAPI()
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # você pode trocar "*" por "https://seudominio.com" depois
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 openai.api_key = "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"
 
 @app.post("/gerar-cardapio")
