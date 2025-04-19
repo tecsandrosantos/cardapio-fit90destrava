@@ -1,57 +1,58 @@
-
-from fastapi import FastAPI, Request
-import openai
+from fastapi import FastAPI
+from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from openai import OpenAI
 import os
 
 app = FastAPI()
 
-from fastapi.middleware.cors import CORSMiddleware
-
+# Libera o CORS pra qualquer origem (ajuste depois pro seu domínio se quiser)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # você pode trocar "*" por "https://seudominio.com" depois
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
-openai.api_key = "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"
+# Dados recebidos do frontend
+class CardapioRequest(BaseModel):
+    tdee: int
+    deficit: int
+    alimentos: dict
 
 @app.post("/gerar-cardapio")
-async def gerar_cardapio(request: Request):
-    data = await request.json()
-    tdee = data.get("tdee")
-    deficit = data.get("deficit", 30)
-    alimentos = data.get("alimentos", {})
+async def gerar_cardapio(data: CardapioRequest):
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-    calorias_alvo = round(tdee * (1 - deficit / 100))
-
+    calorias_dia = data.tdee - data.deficit
     prompt = f"""
-Você é um nutricionista. Crie um cardápio diário com aproximadamente {calorias_alvo} calorias, dividido em:
-- Café da Manhã
-- Lanche da Manhã
+Crie um cardápio de um dia com aproximadamente {calorias_dia} calorias, dividido em:
+- Café da manhã
+- Lanche da manhã
 - Almoço
-- Lanche da Tarde
+- Lanche da tarde
 - Jantar
 - Ceia
 
-Use apenas os seguintes alimentos:
+Use somente os seguintes alimentos permitidos para cada refeição:
+{data.alimentos}
 
-{chr(10).join([f"- {refeicao}: {', '.join(itens)}" for refeicao, itens in alimentos.items()])}
+Formato da resposta:
+Café da Manhã:
+- Alimento 1
+- Alimento 2
+(Quantidade aproximada em calorias: XXX kcal)
 
-Informe as calorias por refeição e o total final.
+...
+
+Total aproximado: XXXX kcal
 """
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "Você é um nutricionista especialista em emagrecimento."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-        max_tokens=1000
+        messages=[{"role": "user", "content": prompt}],
     )
 
-    cardapio = response.choices[0].message.content
-    return {"cardapio": cardapio}
+    cardapio_texto = response.choices[0].message.content
+    return {"cardapio": cardapio_texto}
